@@ -4,7 +4,7 @@
 // 1. Upload this file to the same folder as index.html on your server.
 // 2. Edit the $API_KEY line below with your actual OpenRouter Key.
 
-$API_KEY = 'sk-or-YOUR-KEY-HERE'; // <--- PASTE YOUR KEY HERE
+$API_KEY = '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'; // <--- PASTE YOUR KEY HERE
 
 // --- Security Headers ---
 header("Access-Control-Allow-Origin: *"); // Adjust this to your domain for max security
