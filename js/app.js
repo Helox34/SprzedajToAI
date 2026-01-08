@@ -1,116 +1,73 @@
-/**
- * Plik obsługujący połączenie z Google Gemini API.
- * Ten kod wysyła zdjęcie i dane do modelu AI, a następnie odbiera gotowy opis i wycenę.
- */
+const view = document.getElementById("view");
 
-async function generateAI(imageFile, details) {
-  
-  // 1. Sprawdzenie czy mamy zdjęcie
-  if (!imageFile) {
-    alert("Błąd: Brak zdjęcia do analizy.");
-    return mockResult();
-  }
+function next() {
+  state.step++;
+  render();
 
-  // 2. Konwersja zdjęcia na format Base64 (wymagany przez API)
-  const imageBase64Full = await toBase64(imageFile);
-  const base64Data = imageBase64Full.split(',')[1]; // Usuwamy nagłówek "data:image/..."
-  const mimeType = imageBase64Full.split(';')[0].split(':')[1];
-
-  // =================================================================
-  // TWOJE DANE API (Klucz ze zrzutu ekranu)
-  const API_KEY = "AIzaSyAHfGqaLponlZfBGooFFcn-Lqs4ALmaxXs"; 
-  // =================================================================
-
-  // ZMIANA: Używamy konkretnej wersji "gemini-1.5-flash-001" zamiast aliasu, co naprawia błąd "not found".
-  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${API_KEY}`;
-
-  // 3. Prompt (Instrukcja dla AI) - wersja PROFESJONALNA (BEZ EMOTIKON)
-  const prompt = `
-    Jesteś ekspertem e-commerce. Przeanalizuj to zdjęcie przedmiotu na sprzedaż.
-    
-    Parametry podane przez użytkownika:
-    - Stan: ${details.condition || "Nieokreślony"}
-    - Rozmiar: ${details.size || "Nieokreślony"}
-    - Materiał: ${details.material || "Nieokreślony"}
-    - Fason: ${details.fit || "Standardowy"}
-
-    Twoje zadania:
-    1. Rozpoznaj przedmiot (Marka, Model, Rodzaj).
-    2. Oszacuj realną cenę rynkową w PLN (używana odzież/przedmioty na OLX/Vinted). Podaj zakres np. "120 - 150".
-    3. Stwórz konkretny tytuł ogłoszenia (max 8 słów, bez zbędnych przymiotników).
-    4. Napisz profesjonalny opis sprzedażowy. Skup się na faktach, zaletach i stanie przedmiotu. 
-    WAŻNE: NIE UŻYWAJ ŻADNYCH EMOTIKON (ani w tytule, ani w opisie). Styl ma być czysty i minimalistyczny.
-    5. Krótko uzasadnij wycenę w jednym zdaniu.
-
-    WAŻNE: Odpowiedz TYLKO czystym formatem JSON, bez bloków markdown (\`\`\`json).
-    Wymagana struktura JSON:
-    {
-      "title": "Tytuł ogłoszenia",
-      "description": "Treść opisu...",
-      "price": "100 - 150", 
-      "priceReason": "Uzasadnienie..."
-    }
-  `;
-
-  try {
-    // 4. Wysłanie żądania do Google Gemini
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: base64Data } }
-          ]
-        }],
-        generationConfig: {
-          response_mime_type: "application/json", // Wymuszenie formatu JSON
-          temperature: 0.4
-        }
+  // Jeśli weszliśmy w krok "Tworzenie", uruchom AI
+  if (state.step === 3) {
+    generateAI(state.image, state.details)
+      .then(result => {
+        state.result = result;
+        addToHistory(result); // Zapisz w historii
+        state.step++;
+        render(); // Przejdź do wyniku
       })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || "Błąd połączenia z API");
-    }
-
-    // 5. Przetworzenie odpowiedzi
-    const data = await response.json();
-    const textResponse = data.candidates[0].content.parts[0].text;
-    const resultJson = JSON.parse(textResponse);
-
-    // Zwracamy wynik połączony ze zdjęciem użytkownika
-    return {
-      ...resultJson,
-      image: imageBase64Full
-    };
-
-  } catch (error) {
-    console.error("Błąd AI:", error);
-    alert("Wystąpił problem z API: " + error.message + "\n\nWyświetlam dane przykładowe.");
-    return mockResult(imageBase64Full);
+      .catch(err => {
+        console.error(err);
+        alert("Błąd AI: " + err.message);
+        state.step = 2; // Wróć do szczegółów
+        render();
+      });
   }
 }
 
-// Funkcja pomocnicza: Konwersja pliku na Base64
-function toBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = error => reject(error);
+function select(key, value) {
+  state.details[key] = value;
+  render();
+}
+
+function handleImageUpload(input) {
+  if (input.files && input.files[0]) {
+    state.image = input.files[0];
+    next();
+  }
+}
+
+// --- HISTORIA ---
+function addToHistory(result) {
+  const item = { id: Date.now(), ...result };
+  state.history.unshift(item);
+  localStorage.setItem('sprzedajto_history', JSON.stringify(state.history));
+}
+
+function showHistory() {
+  state.step = 'history';
+  render();
+}
+
+function loadHistoryItem(id) {
+  const item = state.history.find(i => i.id === id);
+  if (item) {
+    state.result = item;
+    state.step = 4;
+    render();
+  }
+}
+
+function deleteHistoryItem(id, event) {
+  event.stopPropagation();
+  state.history = state.history.filter(i => i.id !== id);
+  localStorage.setItem('sprzedajto_history', JSON.stringify(state.history));
+  render();
+}
+
+// --- KOPIOWANIE ---
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    // Możesz tu dodać console.log("Skopiowano")
   });
 }
 
-// Funkcja awaryjna (gdyby API nie zadziałało)
-function mockResult(img) {
-  return {
-    title: "Przykładowy Tytuł (Błąd API)",
-    description: "Nie udało się połączyć z AI. Sprawdź konsolę (F12) aby zobaczyć błąd.",
-    price: "0",
-    priceReason: "Błąd połączenia",
-    image: img || "https://dummyimage.com/600x600/ccc/000&text=Error"
-  };
-}
+// Start
+render();

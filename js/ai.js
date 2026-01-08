@@ -8,7 +8,7 @@ async function generateAI(imageFile, details) {
   // 1. Sprawdzenie czy mamy zdjęcie
   if (!imageFile) {
     alert("Błąd: Brak zdjęcia do analizy.");
-    return mockResult();
+    return mockResult(); // Zwracamy dane testowe w razie błędu
   }
 
   // 2. Konwersja zdjęcia na format Base64 (wymagany przez API)
@@ -17,13 +17,13 @@ async function generateAI(imageFile, details) {
   const mimeType = imageBase64Full.split(';')[0].split(':')[1];
 
   // =================================================================
-  // TWOJE DANE API
-  const API_KEY = "AIzaSyAHfGqaLponlZfBGooFFcn-Lqs4ALmaxXs"; 
+  // ▼▼▼ TU WKLEJ SWÓJ KLUCZ API (zachowaj cudzysłowy) ▼▼▼
+  const API_KEY = "AIzaSyAHfGqaLponlZfBGooFFcn-Lqs4ALmaxXs";
   // =================================================================
 
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
 
-  // 3. Prompt (Instrukcja dla AI) - wersja PROFESJONALNA (BEZ EMOTIKON)
+  // 3. Konstrukcja zapytania (Promptu)
   const prompt = `
     Jesteś ekspertem e-commerce. Przeanalizuj to zdjęcie przedmiotu na sprzedaż.
     
@@ -35,19 +35,18 @@ async function generateAI(imageFile, details) {
 
     Twoje zadania:
     1. Rozpoznaj przedmiot (Marka, Model, Rodzaj).
-    2. Oszacuj realną cenę rynkową w PLN (używana odzież/przedmioty na OLX/Vinted). Podaj zakres np. "120 - 150".
-    3. Stwórz konkretny tytuł ogłoszenia (max 8 słów, bez zbędnych przymiotników).
-    4. Napisz profesjonalny opis sprzedażowy. Skup się na faktach, zaletach i stanie przedmiotu. 
-    WAŻNE: NIE UŻYWAJ ŻADNYCH EMOTIKON (ani w tytule, ani w opisie). Styl ma być czysty i minimalistyczny.
-    5. Krótko uzasadnij wycenę w jednym zdaniu.
+    2. Oszacuj realną cenę rynkową w PLN (używana odzież/przedmioty na OLX/Vinted).
+    3. Stwórz chwytliwy tytuł ogłoszenia (max 8 słów).
+    4. Napisz opis sprzedażowy (zachęcający, wymieniający zalety, sugerujący zastosowanie).
+    5. Krótko uzasadnij wycenę.
 
     WAŻNE: Odpowiedz TYLKO czystym formatem JSON, bez bloków markdown (\`\`\`json).
     Wymagana struktura JSON:
     {
-      "title": "Tytuł ogłoszenia",
-      "description": "Treść opisu...",
-      "price": "100 - 150", 
-      "priceReason": "Uzasadnienie..."
+      "title": "...",
+      "description": "...",
+      "price": "100", 
+      "priceReason": "..."
     }
   `;
 
@@ -65,7 +64,7 @@ async function generateAI(imageFile, details) {
         }],
         generationConfig: {
           response_mime_type: "application/json", // Wymuszenie formatu JSON
-          temperature: 0.4 // Niższa temperatura = bardziej konkretne, mniej "kreatywne" odpowiedzi
+          temperature: 0.7 // Kreatywność
         }
       })
     });
@@ -103,13 +102,13 @@ function toBase64(file) {
   });
 }
 
-// Funkcja awaryjna (gdyby API nie zadziałało)
+// Funkcja awaryjna (gdyby API nie zadziałało lub brakowało klucza)
 function mockResult(img) {
   return {
     title: "Przykładowy Tytuł (Błąd API)",
-    description: "Nie udało się połączyć z AI. Sprawdź konsolę (F12) aby zobaczyć błąd.",
+    description: "Nie udało się połączyć z AI. Upewnij się, że wkleiłeś poprawny klucz API w pliku js/ai.js.",
     price: "0",
-    priceReason: "Błąd połączenia",
+    priceReason: "Brak połączenia z API.",
     image: img || "https://dummyimage.com/600x600/ccc/000&text=Error"
   };
 }

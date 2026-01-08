@@ -9,31 +9,22 @@
 <body>
 
 <header class="topbar">
-  <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: auto;">
-    <div class="logo" onclick="location.reload()" style="cursor: pointer;">🟦 SprzedajTo AI</div>
-    
-    <button class="button secondary" style="width: auto; padding: 8px 16px; margin: 0; display: flex; align-items: center; gap: 8px;" onclick="showHistory()">
-      <span>📜</span> Historia
-    </button>
+  <div class="logo">
+    <div class="logo-icon">S</div> SprzedajTo AI
   </div>
+  <button class="button secondary" style="width: auto; margin: 0; padding: 8px 16px; font-size: 13px; display: flex; align-items: center; gap: 6px;" onclick="showHistory()">
+    Historia
+  </button>
 </header>
 
 <div class="container">
-
-  <div class="steps">
-    <div class="step active">1 Zdjęcie</div>
-    <div class="step">2 Analiza</div>
-    <div class="step">3 Szczegóły</div>
-    <div class="step">4 Tworzenie</div>
-    <div class="step">5 Gotowe</div>
-  </div>
+  <div class="steps"></div>
 
   <main id="view"></main>
-
 </div>
 
 <footer class="footer">
-  © 2026 SprzedajTo AI. Powered by GPT-4o Vision.
+  © 2026 SprzedajTo AI. Powered by Google Gemini.
 </footer>
 
 <script src="js/state.js"></script>
