@@ -1,68 +1,60 @@
 <?php
-// proxy.php - Secure Bridge to OpenRouter
-// Instructions:
-// 1. Upload this file to the same folder as index.html on your server.
-// 2. Edit the $API_KEY line below with your actual OpenRouter Key.
+// proxy.php
 
-$API_KEY = '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'; // <--- PASTE YOUR KEY HERE
-
-// --- Security Headers ---
-header("Access-Control-Allow-Origin: *"); // Adjust this to your domain for max security
+// 1. Zabezpieczenie przed CORS (dla developmentu pozwalamy na wszystko)
+header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Title"); // Dodano nagłówki
 header("Content-Type: application/json");
 
-// Handle Preflight Options Request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
+    exit(0);
 }
 
-// Only allow POST
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(["error" => "Method not allowed"]);
-    exit;
-}
+// 2. WPISZ NOWY KLUCZ TUTAJ
+$API_KEY = 'TWOJ_NOWY_KLUCZ_OPENROUTER';
 
-// Get Input Data
-$input = json_decode(file_get_contents('php://input'), true);
-if (!$input) {
+// Sprawdzenie czy body nie jest puste (częsty błąd przy dużych plikach)
+$rawInput = file_get_contents('php://input');
+if (!$rawInput) {
     http_response_code(400);
-    echo json_encode(["error" => "Invalid JSON input"]);
+    echo json_encode(["error" => "Brak danych wejściowych. Może plik jest za duży dla serwera PHP (post_max_size)?"]);
     exit;
 }
 
-// Prepare OpenRouter Request
-$url = 'https://openrouter.ai/api/v1/chat/completions';
+$input = json_decode($rawInput, true);
 
-// Forward the model and messages from the client, but use OUR Key
-$data = [
-    'model' => $input['model'] ?? 'google/gemini-2.0-flash-exp:free', // Default model
-    'messages' => $input['messages']
-];
-
-$ch = curl_init($url);
+// 3. Konfiguracja CURL
+$ch = curl_init('https://openrouter.ai/api/v1/chat/completions');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+// Ważne: Przekazujemy dane dokładnie tak jak przyszły, lub budujemy nową strukturę
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+    'model' => $input['model'] ?? 'google/gemini-2.0-flash-exp:free',
+    'messages' => $input['messages']
+]));
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     "Authorization: Bearer $API_KEY",
-    "HTTP-Referer: https://sprzedajto.ai", // Required by OpenRouter
+    "HTTP-Referer: https://twoja-strona.pl", // OpenRouter wymaga tego
     "X-Title: SprzedajTo AI",
     "Content-Type: application/json"
 ]);
 
+// Wyłączenie weryfikacji SSL (tylko dla localhost/XAMPP, na produkcji usuń tę linię!)
+// curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); 
+
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-if (curl_errno($ch)) {
-    http_response_code(500);
-    echo json_encode(["error" => "Curl error: " . curl_error($ch)]);
-} else {
-    http_response_code($httpCode);
-    echo $response;
-}
+$curlError = curl_error($ch);
 
 curl_close($ch);
+
+// 4. Zwracanie błędów
+if ($curlError) {
+    http_response_code(500);
+    echo json_encode(["error" => "Curl error: $curlError"]);
+} else {
+    http_response_code($httpCode);
+    echo $response; // Przekazujemy odpowiedź 1:1 z OpenRoutera
+}
 ?>
