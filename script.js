@@ -97,7 +97,6 @@ async function processImage(base64Image) {
 
     try {
         if (typeof imglyRemoveBackground !== 'undefined') {
-            // Configure to load assets from CDN to avoid local path issues
             const config = {
                 publicPath: "https://input-image-processor.b-cdn.net/imgly-background-removal/dist/"
             };
@@ -127,53 +126,74 @@ async function processImage(base64Image) {
 }
 
 async function generateDescription() {
-    // Use manually selected data for the prompt
     const { category, audience, condition, material, size, platform } = state.data;
     const categoryLabel = formConfig.categories.find(c => c.id === category)?.label || category;
     const audienceLabel = formConfig.audiences.find(a => a.id === audience)?.label || audience;
 
     const prompt = `
-    Jesteś ekspertem e-commerce. Napisz profesjonalne ogłoszenie sprzedaży na ${platform} na podstawie tych danych (użytkownik wybrał je ręcznie):
+    Jesteś ekspertem e-commerce. Przeanalizuj zdjęcie i dane, a następnie stwórz ogłoszenie.
     
-    Kategoria: ${categoryLabel}
-    Dla kogo: ${audienceLabel}
-    Stan: ${condition}
-    Materiał: ${material}
-    Rozmiar: ${size}
-    
-    Zanalizuj też załączone zdjęcie, aby dodać szczegóły (marka, kolor, styl), których użytkownik nie podał.
-    
-    Zwróć JSON:
+    DANE OD UŻYTKOWNIKA:
+    - Kategoria: ${categoryLabel}
+    - Odbiorca: ${audienceLabel}
+    - Stan: ${condition}
+    - Materiał: ${material}
+    - Rozmiar: ${size}
+    - Platforma: ${platform}
+
+    ZADANIE:
+    1. Oszacuj realną cenę rynkową (price_range) w PLN dla takiego przedmiotu używanego (np. "40-60 PLN").
+    2. Wymyśl chwytliwy tytuł (title).
+    3. Napisz zachęcający opis (description).
+
+    FORMAT ODPOWIEDZI (Tylko czysty JSON):
     {
-        "title": "Chwytliwy tytuł (max 50 znaków) z emoji",
-        "description": "Profesjonalny, sprzedażowy opis, zachęcający do zakupu. Podkreśl zalety.",
-        "price_range": "Sugestia ceny (np. 80-120 PLN)"
+        "title": "...",
+        "description": "...",
+        "price_range": "..."
     }
     `;
 
     try {
-        // We send the image here for the FINAL text generation, not for filling the form
         const response = await callOpenRouter([
             {
                 role: "user",
                 content: [
                     { type: "text", text: prompt },
-                    { type: "image_url", image_url: { url: state.data.originalImage } } // Use original image for context
+                    { type: "image_url", image_url: { url: state.data.originalImage } }
                 ]
             }
         ]);
-        const content = response.choices[0].message.content.replace(/```json|```/g, '').trim();
+
+        // Handle API Errors
+        if (response.error) {
+            console.error("OpenRouter API Error:", response.error);
+            throw new Error(response.error.message || "Unknown API Error");
+        }
+
+        if (!response.choices || !response.choices.length) {
+            console.error("Invalid Response Structure:", response);
+            throw new Error("Otrzymano pustą odpowiedź od AI.");
+        }
+
+        let content = response.choices[0].message.content;
+
+        // Robust JSON extraction
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            content = jsonMatch[0];
+        }
+
         return JSON.parse(content);
     } catch (e) {
-        console.error(e);
+        console.error("AI Generation Error:", e);
         return {
             title: `Sprzedam ${categoryLabel} - ${condition}`,
-            description: "Świetny przedmiot w dobrej cenie. Polecam!",
+            description: "Nie udało się wygenerować opisu automatycznie. Spróbuj ponownie lub uzupełnij ręcznie. (Błąd: " + e.message + ")",
             price_range: "Do negocjacji"
         };
     }
 }
-
 
 // --- VIEWS ---
 
@@ -209,13 +229,11 @@ const views = {
         // Helper to get sizes based on selection
         const getSizes = () => {
             if (!state.data.category || !state.data.audience) return [];
-
-            // Special case for 'Other' - no sizes
             if (state.data.category === 'other') return [];
 
             if (state.data.category === 'shoes') {
                 if (state.data.audience === 'kids') return formConfig.sizes.shoesKids;
-                if (state.data.audience === 'women') return formConfig.sizes.shoesWomen; // Use new range
+                if (state.data.audience === 'women') return formConfig.sizes.shoesWomen;
                 return formConfig.sizes.shoesAdult;
             }
             return formConfig.sizes.clothing;
@@ -261,7 +279,7 @@ const views = {
 
         const renderSizes = () => {
             if (!state.data.audience) return '';
-            if (isOther) return ''; // Skip for Other
+            if (isOther) return '';
 
             return `
                 <div class="form-section fade-in">
@@ -280,9 +298,8 @@ const views = {
         };
 
         const renderMaterial = () => {
-            // Show if size selected OR it's 'other' (and audience selected)
             if (!state.data.size && !isOther) return '';
-            if (isOther) return ''; // User asked to REMOVE material for 'other' too
+            if (isOther) return '';
 
             return `
                 <div class="form-section fade-in">
@@ -302,9 +319,7 @@ const views = {
         };
 
         const renderCondition = () => {
-            // Show if material set OR it's 'other' (since other skips size/material)
             const showCondition = state.data.material || isOther;
-
             if (!showCondition) return '';
 
             return `
@@ -388,9 +403,9 @@ const views = {
                         <img src="${uploadImg}" class="product-image-hero">
                     </div>
 
-                    <div class="price-card-hero">
+                    <div class="price-card-hero" style="border: 2px solid #28a74533;">
                         <div class="price-header"><i class="fa-solid fa-dollar-sign"></i> Sugerowana cena</div>
-                        <div class="price-amount">${rData.price_range || 'Do wyceny'}</div>
+                        <div class="price-amount" style="color: #000;">${rData.price_range || 'Do wyceny'}</div>
                         <div class="price-desc">Cena zoptymalizowana przez AI dla szybkiej sprzedaży na ${state.data.platform}.</div>
                     </div>
                 </div>
@@ -500,7 +515,7 @@ function handleFileSelect(event) {
         reader.onload = (e) => {
             state.data.originalImage = e.target.result;
             state.isAnalyzing = true;
-            processImage(state.data.originalImage); // Removes BG only, then goes to Details
+            processImage(state.data.originalImage);
         };
         reader.readAsDataURL(file);
     }
@@ -509,7 +524,7 @@ function handleFileSelect(event) {
 function setCategory(id) { state.data.category = id; render(); }
 function setAudience(id) { state.data.audience = id; render(); }
 function setSize(s) { state.data.size = s; render(); }
-function setMaterial(m) { state.data.material = m; } // No re-render needed for input
+function setMaterial(m) { state.data.material = m; }
 function setCondition(c) { state.data.condition = c; render(); }
 
 function submitDetails() {
@@ -543,14 +558,13 @@ function resetApp() {
 function showHistory() { state.currentStep = 4; render(); }
 function loadHistoryItem(index) {
     state.data = { ...state.history[index] };
-    state.generatedData = null; // Maybe store this too?
+    state.generatedData = null;
     state.currentStep = 3;
     render();
 }
 
 // Settings Modal Logic
 function openSettings() {
-    // Check if modal exists
     if (!document.getElementById('settings-modal')) {
         const modal = document.createElement('div');
         modal.id = 'settings-modal';
