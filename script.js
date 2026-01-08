@@ -97,10 +97,6 @@ async function processImage(base64Image) {
 
     try {
         if (typeof imglyRemoveBackground !== 'undefined') {
-            const config = {
-                publicPath: "https://input-image-processor.b-cdn.net/imgly-background-removal/dist/"
-            };
-
             const remover = window.imglyRemoveBackground || window.removeBackground;
 
             if (remover) {
@@ -403,9 +399,9 @@ const views = {
                         <img src="${uploadImg}" class="product-image-hero">
                     </div>
 
-                    <div class="price-card-hero" style="border: 2px solid #28a74533;">
+                    <div class="price-card-hero">
                         <div class="price-header"><i class="fa-solid fa-dollar-sign"></i> Sugerowana cena</div>
-                        <div class="price-amount" style="color: #000;">${rData.price_range || 'Do wyceny'}</div>
+                        <div class="price-amount">${rData.price_range || 'Do wyceny'}</div>
                         <div class="price-desc">Cena zoptymalizowana przez AI dla szybkiej sprzedaży na ${state.data.platform}.</div>
                     </div>
                 </div>
