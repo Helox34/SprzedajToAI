@@ -3,12 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <title>SprzedajTo AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <header class="topbar">
-  <div class="logo">🟦 SprzedajTo AI</div>
+  <div style="display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: auto;">
+    <div class="logo" onclick="location.reload()" style="cursor: pointer;">🟦 SprzedajTo AI</div>
+    
+    <button class="button secondary" style="width: auto; padding: 8px 16px; margin: 0; display: flex; align-items: center; gap: 8px;" onclick="showHistory()">
+      <span>📜</span> Historia
+    </button>
+  </div>
 </header>
 
 <div class="container">
@@ -26,7 +33,7 @@
 </div>
 
 <footer class="footer">
-  © 2026 SprzedajTo AI. Powered by Google Gemini.
+  © 2026 SprzedajTo AI. Powered by GPT-4o Vision.
 </footer>
 
 <script src="js/state.js"></script>
