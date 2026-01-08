@@ -553,7 +553,7 @@ function closeSettings() {
 function saveSettings() {
     const key = document.getElementById('api-key-input').value;
     state.apiKey = key;
-    localStorage.setItem('openrouter_key', key);
+    localStorage.setItem('openrouter_key', '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');
     closeSettings();
 }
 
