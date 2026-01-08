@@ -2,7 +2,7 @@
 const state = {
     currentStep: 0,
     apiKey: localStorage.getItem('openrouter_key') || '',
-    useProxy: true, // Try proxy first
+    useProxy: true,
     data: {
         itemName: "",
         category: null,
@@ -14,9 +14,10 @@ const state = {
         color: "",
         platform: "vinted",
         uploadedImage: null,
-        originalImage: null // Keep original for reference
+        originalImage: null
     },
-    history: [],
+    // Load history from local storage
+    history: JSON.parse(localStorage.getItem('sprzedajto_history') || '[]'),
     analysisStatus: ""
 };
 
@@ -24,7 +25,7 @@ const state = {
 const formConfig = {
     categories: [
         { id: 'shoes', label: 'Buty', icon: 'fa-shoe-prints' },
-        { id: 'shirt', label: 'Koszule', icon: 'fa-shirt' }, // Added
+        { id: 'shirt', label: 'Koszule', icon: 'fa-shirt' },
         { id: 'sweatshirt', label: 'Bluza', icon: 'fa-layer-group' },
         { id: 'tshirt', label: 'Koszulka', icon: 'fa-shirt' },
         { id: 'pants', label: 'Spodnie', icon: 'fa-layer-group' },
@@ -39,7 +40,7 @@ const formConfig = {
         { id: 'unisex', label: 'Unisex' }
     ],
     sizes: {
-        shoesWomen: ['32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42'], // New range
+        shoesWomen: ['32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42'],
         shoesAdult: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
         shoesKids: ['20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'],
         clothing: ['XS', 'S', 'M', 'L', 'XL', 'XXL']
@@ -49,6 +50,11 @@ const formConfig = {
 
 // --- DOM Elements ---
 const appView = document.getElementById('app-view');
+
+// Helper to save history
+function saveHistory() {
+    localStorage.setItem('sprzedajto_history', JSON.stringify(state.history));
+}
 
 // --- AI SERVICE ---
 async function callOpenRouter(messages, model = 'google/gemini-2.0-flash-exp:free') {
@@ -91,8 +97,22 @@ async function processImage(base64Image) {
 
     try {
         if (typeof imglyRemoveBackground !== 'undefined') {
-            const blob = await imglyRemoveBackground(base64Image);
-            state.data.uploadedImage = URL.createObjectURL(blob);
+            // Configure to load assets from CDN to avoid local path issues
+            const config = {
+                publicPath: "https://input-image-processor.b-cdn.net/imgly-background-removal/dist/"
+            };
+
+            const remover = window.imglyRemoveBackground || window.removeBackground;
+
+            if (remover) {
+                const blob = await remover(base64Image, {
+                    publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.3.0/dist/"
+                });
+                state.data.uploadedImage = URL.createObjectURL(blob);
+            } else {
+                console.warn("Library not found");
+                state.data.uploadedImage = base64Image;
+            }
         } else {
             state.data.uploadedImage = base64Image;
         }
@@ -126,7 +146,8 @@ async function generateDescription() {
     Zwróć JSON:
     {
         "title": "Chwytliwy tytuł (max 50 znaków) z emoji",
-        "description": "Profesjonalny, sprzedażowy opis, zachęcający do zakupu. Podkreśl zalety."
+        "description": "Profesjonalny, sprzedażowy opis, zachęcający do zakupu. Podkreśl zalety.",
+        "price_range": "Sugestia ceny (np. 80-120 PLN)"
     }
     `;
 
@@ -147,7 +168,8 @@ async function generateDescription() {
         console.error(e);
         return {
             title: `Sprzedam ${categoryLabel} - ${condition}`,
-            description: "Świetny przedmiot w dobrej cenie. Polecam!"
+            description: "Świetny przedmiot w dobrej cenie. Polecam!",
+            price_range: "Do negocjacji"
         };
     }
 }
@@ -363,13 +385,12 @@ const views = {
                 <!-- Left Column -->
                 <div class="result-col-left">
                     <div class="image-card-hero">
-                        <span class="badge-enhanced">AI ENHANCED</span>
                         <img src="${uploadImg}" class="product-image-hero">
                     </div>
 
                     <div class="price-card-hero">
                         <div class="price-header"><i class="fa-solid fa-dollar-sign"></i> Sugerowana cena</div>
-                        <div class="price-amount">130 - 175 PLN</div>
+                        <div class="price-amount">${rData.price_range || 'Do wyceny'}</div>
                         <div class="price-desc">Cena zoptymalizowana przez AI dla szybkiej sprzedaży na ${state.data.platform}.</div>
                     </div>
                 </div>
@@ -385,7 +406,7 @@ const views = {
                     <div class="content-card">
                         <div class="card-header">
                             <span class="label-small">TYTUŁ</span>
-                            <button class="action-icon"><i class="fa-regular fa-copy"></i></button>
+                            <button class="action-icon" onclick="copyToClipboard('${rData.title.replace(/'/g, "\\'")}')"><i class="fa-regular fa-copy"></i></button>
                         </div>
                         <div class="content-title">${rData.title}</div>
                     </div>
@@ -393,7 +414,7 @@ const views = {
                     <div class="content-card">
                         <div class="card-header">
                             <span class="label-small">OPIS</span>
-                            <button class="action-icon"><i class="fa-regular fa-copy"></i></button>
+                            <button class="action-icon" onclick="copyToClipboard('${rData.description.replace(/'/g, "\\'")}')"><i class="fa-regular fa-copy"></i></button>
                         </div>
                         <div class="content-desc">${rData.description}</div>
                     </div>
@@ -431,10 +452,10 @@ const views = {
                     ${state.history.map((item, index) => `
                         <div class="card" style="cursor: pointer; padding: 1rem;" onclick="loadHistoryItem(${index})">
                             <div style="height: 150px; overflow: hidden; border-radius: 8px; margin-bottom: 0.5rem;">
-                                <img src="${item.uploadedImage}" style="width: 100%; height: 100%; object-fit: cover;">
+                                <img src="${item.uploadedImage || 'https://via.placeholder.com/150'}" style="width: 100%; height: 100%; object-fit: cover;">
                             </div>
-                            <div style="font-weight: 700;">${item.itemName || 'Ogłoszenie'}</div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${item.date ? item.date.toLocaleDateString() : ''}</div>
+                            <div style="font-weight: 700;">${item.categoryLabel || 'Przedmiot'}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${new Date(item.date).toLocaleDateString()}</div>
                         </div>
                     `).join('')}
                 </div>
@@ -493,7 +514,10 @@ function setCondition(c) { state.data.condition = c; render(); }
 
 function submitDetails() {
     state.generatedData = null; // Force regenerate
-    state.history.unshift({ ...state.data, date: new Date() });
+    // Save to history immediately
+    const categoryLabel = formConfig.categories.find(c => c.id === state.data.category)?.label;
+    state.history.unshift({ ...state.data, categoryLabel, date: new Date() });
+    saveHistory(); // Auto-save
     state.currentStep = 3;
     render();
 }
@@ -502,6 +526,12 @@ function switchPlatform(p) {
     state.data.platform = p;
     state.generatedData = null; // Regenerate for platform
     render();
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Skopiowano do schowka!");
+    });
 }
 
 function resetApp() {
@@ -553,7 +583,7 @@ function closeSettings() {
 function saveSettings() {
     const key = document.getElementById('api-key-input').value;
     state.apiKey = key;
-    localStorage.setItem('openrouter_key', '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');
+    localStorage.setItem('openrouter_key', key);
     closeSettings();
 }
 

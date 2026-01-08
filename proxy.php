@@ -21,7 +21,7 @@ if (isset($headers['Authorization'])) {
 }
 
 // Jeśli nie ma klucza z przeglądarki, możesz go wpisać tutaj na sztywno (odkomentuj linię niżej):
-$apiKey = "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";
+$apiKey = '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'; // <--- PASTE YOUR KEY HERE
 
 if (!$apiKey) {
     http_response_code(401);
@@ -38,7 +38,7 @@ curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, $inputData);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     "Content-Type: application/json",
-    "Authorization: " . $apiKey,
+    "Authorization: Bearer " . $apiKey,
     "HTTP-Referer: https://egzamininformatyka.pl", // Twoja domena
     "X-Title: SprzedajToAI"
 ]);
