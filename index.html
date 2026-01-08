@@ -16,18 +16,24 @@
 
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
+
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal/dist/imgly-background-removal.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js"></script>
 </head>
 
 <body>
 
     <!-- Header -->
     <header class="app-header">
-        <div class="logo">
-            <div class="logo-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div class="logo" onclick="resetApp()" style="cursor: pointer;">
+            <div class="logo-icon"><i class="fa-solid fa-cube"></i></div>
             <span class="logo-text">SprzedajTo.Al</span>
         </div>
         <div class="header-actions">
-            <button class="icon-btn" aria-label="History"><i class="fa-solid fa-clock-rotate-left"></i></button>
+            <button class="icon-btn" onclick="showHistory()" title="Historia"><i
+                    class="fa-solid fa-clock-rotate-left"></i></button>
+            <button class="icon-btn"><i class="fa-solid fa-gear"></i></button>
         </div>
     </header>
 

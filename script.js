@@ -1,35 +1,74 @@
 // App State
 const state = {
-    currentStep: 0, // 0: Upload, 1: Details, 2: Loading, 3: Result
+    currentStep: 0, // 0: Upload, 1: Details, 2: Loading, 3: Result, 4: History
     data: {
-        itemName: "Bluza Nike Air",
-        size: "",
+        category: null,
+        audience: null,
+        size: null,
         condition: "",
         material: "",
-        fit: "",
-        platform: "vinted", // Default platform tab
-        uploadedImage: null // Store base64 image here
+        platform: "vinted",
+        uploadedImage: null
+    },
+    history: [] // Store generated items
+};
+
+// Form Configuration
+const formConfig = {
+    categories: [
+        { id: 'shoes', label: 'Buty', icon: 'fa-shoe-prints' },
+        { id: 'sweatshirt', label: 'Bluza', icon: 'fa-shirt' },
+        { id: 'tshirt', label: 'Koszulka', icon: 'fa-shirt' },
+        { id: 'pants', label: 'Spodnie', icon: 'fa-layer-group' },
+        { id: 'jacket', label: 'Kurtka', icon: 'fa-vest' },
+        { id: 'other', label: 'Inne', icon: 'fa-box-open' }
+    ],
+    audiences: [
+        { id: 'women', label: 'Damskie' },
+        { id: 'men', label: 'Męskie' },
+        { id: 'kids', label: 'Dziecięce' },
+        { id: 'unisex', label: 'Unisex' }
+    ],
+    conditions: [
+        "Nowy z metką",
+        "Nowy bez metki",
+        "Bardzo dobry",
+        "Dobry",
+        "Zadowalający"
+    ],
+    sizes: {
+        shoesAdult: ['36', '36.5', '37', '38', '38.5', '39', '40', '40.5', '41', '42', '42.5', '43', '44', '44.5', '45', '46', '47'],
+        shoesKids: ['20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40'],
+        clothing: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']
     }
 };
 
 // DOM Elements
 const appView = document.getElementById('app-view');
 
-// Content Data for Result View
-const resultData = {
-    vinted: {
-        title: "Bluza NIKE AIR Crewneck Czarna M Oryginalna Sportowa BDB",
-        desc: "Czarna klasyka! 🖤 Świetna bluza NIKE AIR Crewneck w rozmiarze M. Idealna dla miłośników streetwearu i sportowego luzu. Stan bardzo dobry (BDB), mało noszona. To must-have w szafie – bawełniana, super wygodna i z kultowym, dużym logo Nike Air, które przyciąga wzrok. Idealna na chłodniejsze dni.\n\nWymiary i więcej zdjęć na życzenie!\n\nRozmiar: M\nMarka: Nike\nStan: BDB\nZapraszam do szafy po więcej markowych ubrań! 🛍️\n\n#nike #bluzanike #nikeair #crewneck #czarnabluza #sportswear #streetwear #rozmiarm #modameska #modadamska #unisex #kurtka #hype"
-    },
-    olx: {
-        title: "Oryginalna Bluza Nike Air Crewneck Czarna Rozmiar M Stan BDB",
-        desc: "Sprzedam czarną bluzę marki Nike, model Air Crewneck w rozmiarze M. Bluza jest w stanie bardzo dobrym, bez dziur, plam czy przetarć. Kolor nie jest sprany, wciąż głęboka czerń.\n\nWykonana z bardzo przyjemnego materiału (mieszanka bawełny). Posiada duże, haftowane/nadrukowane logo na froncie. Świetnie leży, krój regularny.\n\nMożliwy odbiór osobisty w Warszawie lub wysyłka OLX (Paczkomat/Orlen).\nZapraszam do kontaktu przez wiadomość OLX."
-    },
-    allegro: {
-        title: "BLUZA MĘSKA NIKE AIR CREWNECK CZARNA R. M ORYGINAŁ",
-        desc: "Przedmiotem sprzedaży jest oryginalna bluza męska marki NIKE.\n\nModel: Nike Air Crewneck\nRozmiar: M\nKolor: Czarny\nStan: Bardzo dobry (używana, zadbana)\n\nCechy produktu:\n- Klasyczny krój crewneck\n- Wysokiej jakości materiał dominujący: bawełna\n- Wyraziste logo na klatce piersiowej\n- Ściągacze przy rękawach i na dole bluzy w idealnym stanie\n\nGwarantuję szybką wysyłkę w 24h. Produkt w 100% oryginalny. Zachęcam do licytacji i zakupu!"
+// Mock Result Data generator
+const getResultData = (platform) => {
+    const base = {
+        title: `Sprzedam ${state.data.category === 'shoes' ? 'Buty' : 'Przedmiot'} ${state.data.condition} ${state.data.size}`,
+        desc: `Markowy przedmiot w stanie: ${state.data.condition}. Materiał: ${state.data.material}. Rozmiar: ${state.data.size}.`
+    };
+
+    // Map to specific static content for demo if matches logic, otherwise generic template
+    if (state.data.category === 'sweatshirt' && state.data.audience === 'men') {
+        const staticData = {
+            vinted: { title: "Bluza NIKE AIR Crewneck Czarna M BDB", desc: "Świetna bluza Nike Air..." },
+            olx: { title: "Bluza Nike M Czarna", desc: "Sprzedam bluzę..." },
+            allegro: { title: "BLUZA NIKE MĘSKA M", desc: "Oryginalna bluza..." }
+        };
+        if (staticData[platform]) return staticData[platform];
     }
+
+    return {
+        title: [base.title, platform].join(" - "),
+        desc: base.desc
+    };
 };
+
 
 // Views Components
 const views = {
@@ -59,218 +98,316 @@ const views = {
         </div>
     `,
 
-    details: () => `
-        <div class="card">
-            <div style="margin-bottom: 2rem;">
-                <h1 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-main);">
-                    <i class="fa-solid fa-sparkles" style="color: #FBBF24;"></i> Opowiedz nam o przedmiocie
-                </h1>
-                <p style="color: var(--text-secondary); line-height: 1.5;">
-                    Zidentyfikowaliśmy Twój przedmiot jako: <strong style="color: var(--primary);">Bluza Nike Air</strong>. 
-                </p>
-            </div>
-
-            <form id="details-form" onsubmit="handleDetailsSubmit(event)">
-                <!-- Size Input -->
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label class="form-label">Jaki jest rozmiar z metki?</label>
-                    <input type="text" class="form-input" placeholder="Wpisz odpowiedź..." required>
+    details: () => {
+        // Render Categories
+        const renderCategories = () => `
+            <div class="form-section">
+                <label class="form-label">Co sprzedajesz? (Wybierz kategorię)</label>
+                <div class="grid-flexible">
+                    ${formConfig.categories.map(cat => `
+                        <button type="button" 
+                            class="select-btn category-btn ${state.data.category === cat.id ? 'selected' : ''}" 
+                            onclick="setCategory('${cat.id}')">
+                            <i class="fa-solid ${cat.icon}"></i> 
+                            <span>${cat.label}</span>
+                        </button>
+                    `).join('')}
                 </div>
+            </div>
+        `;
 
-                <!-- Condition Buttons -->
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label class="form-label">W jakim stanie jest bluza?</label>
-                    <div class="grid-2">
-                        <button type="button" class="select-btn" onclick="selectOption(this, 'condition', 'Nowy')">Nowy</button>
-                        <button type="button" class="select-btn" onclick="selectOption(this, 'condition', 'Bardzo dobry')">Bardzo dobry</button>
-                        <button type="button" class="select-btn" onclick="selectOption(this, 'condition', 'Dobry')">Dobry</button>
-                        <button type="button" class="select-btn" onclick="selectOption(this, 'condition', 'Używany')">Używany</button>
+        // Render Audience (Horizontal)
+        const renderAudience = () => {
+            if (!state.data.category) return '';
+            return `
+                <div class="form-section fade-in" style="margin-top: 2rem;">
+                    <label class="form-label">Dla kogo?</label>
+                    <div class="grid-flexible">
+                        ${formConfig.audiences.map(aud => `
+                            <button type="button" 
+                                class="select-btn ${state.data.audience === aud.id ? 'selected' : ''}" 
+                                onclick="setAudience('${aud.id}')">
+                                ${aud.label}
+                            </button>
+                        `).join('')}
                     </div>
                 </div>
+            `;
+        };
 
-                <!-- Material Input -->
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label class="form-label">Z jakiego materiału jest wykonana bluza?</label>
-                    <input type="text" class="form-input" placeholder="Wpisz odpowiedź..." required>
-                </div>
+        // Render Sizes
+        const renderSizes = () => {
+            if (!state.data.category || !state.data.audience) return '';
 
-                <!-- Fit Buttons -->
-                <div class="form-group" style="margin-bottom: 2rem;">
-                    <label class="form-label">Jaki to fason (krój)?</label>
-                    <div class="grid-2">
-                        <button type="button" class="select-btn" onclick="selectOption(this, 'fit', 'Standardowy')">Standardowy</button>
-                        <button type="button" class="select-btn" onclick="selectOption(this, 'fit', 'Oversize')">Oversize</button>
-                        <button type="button" class="select-btn" style="width: 50%" onclick="selectOption(this, 'fit', 'Slim fit')">Slim fit</button>
+            let type = 'clothing';
+            if (state.data.category === 'shoes') {
+                type = state.data.audience === 'kids' ? 'shoesKids' : 'shoesAdult';
+            }
+
+            return `
+                <div class="form-section fade-in" style="margin-top: 2rem;">
+                    <label class="form-label">Rozmiar</label>
+                    <div class="size-grid">
+                        ${formConfig.sizes[type].map(s => `
+                            <button type="button" 
+                                class="size-option ${state.data.size === s ? 'selected' : ''}" 
+                                onclick="setSize('${s}')">
+                                ${s}
+                            </button>
+                        `).join('')}
                     </div>
                 </div>
+            `;
+        };
 
-                <button type="submit" class="btn-primary" style="width: 100%;">
-                    Generuj Ogłoszenie 
-                    <i class="fa-solid fa-rocket" style="margin-left: 8px;"></i>
-                </button>
-            </form>
-        </div>
-    `,
+        // Render Material
+        const renderMaterial = () => {
+            if (!state.data.category || !state.data.audience || !state.data.size) return '';
+            return `
+                <div class="form-section fade-in" style="margin-top: 2rem;">
+                    <label class="form-label">Materiał</label>
+                    <input type="text" class="form-input" 
+                        placeholder="Np. Bawełna, Skóra, Poliester..." 
+                        value="${state.data.material}"
+                        onchange="setMaterial(this.value)"
+                        style="width: 100%; padding: 1rem; border-radius: var(--radius-md);">
+                </div>
+             `;
+        };
 
-    result: () => `
-        <div class="result-layout">
-            
-            <div class="result-header">
-                <h1 class="result-title">Gotowe! 🚀</h1>
-                <span class="new-item-link" onclick="location.reload()">Nowy przedmiot</span>
+        // Render Condition (5 options, Horizontal)
+        const renderCondition = () => {
+            if (!state.data.material) return '';
+            return `
+                 <div class="form-section fade-in" style="margin-top: 2rem;">
+                    <label class="form-label">Stan przedmiotu</label>
+                    <div class="grid-flexible-small">
+                         ${formConfig.conditions.map(c => `
+                            <button type="button" class="select-btn ${state.data.condition === c ? 'selected' : ''}" onclick="setCondition('${c}')">
+                                ${c}
+                            </button>
+                         `).join('')}
+                    </div>
+                </div>
+            `;
+        };
+
+        const isReady = state.data.category && state.data.audience && state.data.size && state.data.material && state.data.condition;
+
+        const renderSubmit = () => {
+            if (!isReady) return '';
+            return `
+                <div class="form-section fade-in" style="margin-top: 2rem;">
+                    <button type="button" class="btn-primary" style="width: 100%;" onclick="submitDetails()">
+                        Generuj Ogłoszenie 
+                        <i class="fa-solid fa-rocket" style="margin-left: 8px;"></i>
+                    </button>
+                </div>
+            `;
+        };
+
+        return `
+            <div class="card">
+                <div style="margin-bottom: 2rem;">
+                    <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--text-main);">
+                        <i class="fa-solid fa-list-check" style="color: var(--primary); margin-right: 0.5rem;"></i> Szczegóły
+                    </h1>
+                </div>
+
+                <div id="dynamic-form">
+                    ${renderCategories()}
+                    ${renderAudience()}
+                    ${renderSizes()}
+                    ${renderMaterial()}
+                    ${renderCondition()}
+                    ${renderSubmit()}
+                </div>
             </div>
-            
-            <!-- Result Split View -->
-            <div class="split-view">
-                <!-- Left Column -->
-                <div class="left-col">
+        `;
+    },
+
+    result: () => {
+        const rData = getResultData(state.data.platform);
+
+        return `
+        <div class="result-layout fade-in">
+            <!-- Success Banner -->
+            <div class="success-banner">
+                <div class="success-icon"><i class="fa-solid fa-check"></i></div>
+                <div>
+                    <div style="font-weight: 700;">Ogłoszenie gotowe!</div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Wygenerowaliśmy opis, tytuł i odświeżyliśmy zdjęcie. Jesteś gotowy do sprzedaży.</div>
+                </div>
+            </div>
+
+            <div class="result-grid">
+                <!-- Left Column: Visuals & Price -->
+                <div class="result-col-left">
                     <!-- Image Card -->
-                    <div class="image-card">
+                    <div class="image-card-hero">
                         <span class="badge-enhanced">AI ENHANCED</span>
-                        <!-- Display Uploaded Image Here -->
-                        <img src="${state.data.uploadedImage || 'https://via.placeholder.com/400'}" alt="Uploaded Item" class="product-image">
+                        <img src="${state.data.uploadedImage || 'https://via.placeholder.com/400'}" class="product-image-hero">
                     </div>
 
-                    <!-- Pricing Grid (Moved inside left col for desktop layout or kept separate based on new design preference, keeping standard here) -->
-                    <div class="price-tier-card featured">
-                        <span class="tier-icon dollar"><i class="fa-solid fa-dollar-sign"></i></span>
-                        <div class="tier-label" style="color: var(--primary);">Optymalna Cena</div>
-                        <div class="tier-price" style="font-size: 2.5rem;">125 <span style="font-size: 1rem">zł</span></div>
-                        <div class="tier-sub" style="margin-bottom: 1rem;">Balans czas/zysk</div>
-                        
-                        <!-- Small grid for other prices -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-                            <div>
-                                <div class="tier-label">Szybka</div>
-                                <div style="font-weight: 700;">99 zł</div>
-                            </div>
-                            <div>
-                                <div class="tier-label">Max</div>
-                                <div style="font-weight: 700;">149 zł</div>
-                            </div>
+                    <!-- Hero Price Card (Blue) -->
+                    <div class="price-card-hero">
+                        <div class="price-header">
+                            <i class="fa-solid fa-dollar-sign"></i> Sugerowana cena
+                        </div>
+                        <div class="price-amount">130 - 175 PLN</div>
+                        <div class="price-desc">
+                            Twoje ogłoszenie wyróżnia się na tle konkurencji. Cena zoptymalizowana dla szybkiej sprzedaży.
                         </div>
                     </div>
                 </div>
 
-                <!-- Right Column (Content) -->
-                <div class="right-col">
-                    <!-- Analysis Box -->
-                    <div class="analysis-box">
-                        <i class="fa-regular fa-lightbulb"></i>
-                        AI: Bluza Nike Air w rozmiarze M i w bardzo dobrym stanie jest towarem poszukiwanym. Ceny zostały ustalone na podstawie rynkowych stawek dla używanych, ale markowych bluz crewneck z wyrazistym logo, mieszcząc się w przedziale 40-60% ceny nowego produktu.
+                <!-- Right Column: Content & Tabs -->
+                <div class="result-col-right">
+                    <!-- Tabs -->
+                    <div class="tabs-modern">
+                         <button class="tab-modern ${state.data.platform === 'vinted' ? 'active' : ''}" onclick="switchPlatform('vinted')">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/2/29/Vinted_logo.png" alt="Vinted" style="height: 20px; opacity: 0.8;">
+                         </button>
+                         <button class="tab-modern ${state.data.platform === 'olx' ? 'active' : ''}" onclick="switchPlatform('olx')">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/OLX_green_logo.svg/1200px-OLX_green_logo.svg.png" alt="OLX" style="height: 20px; opacity: 0.8;">
+                         </button>
+                         <button class="tab-modern ${state.data.platform === 'allegro' ? 'active' : ''}" onclick="switchPlatform('allegro')">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/9/9d/Allegro_logo.svg" alt="Allegro" style="height: 24px; opacity: 0.8;">
+                         </button>
                     </div>
 
-                    <!-- Tabs Container -->
-                    <div class="tabs-container">
-                        <div class="tabs-header">
-                            <button class="tab-btn ${state.data.platform === 'vinted' ? 'active' : ''}" onclick="switchPlatform('vinted')">Vinted</button>
-                            <button class="tab-btn ${state.data.platform === 'olx' ? 'active' : ''}" onclick="switchPlatform('olx')">OLX</button>
-                            <button class="tab-btn ${state.data.platform === 'allegro' ? 'active' : ''}" onclick="switchPlatform('allegro')">Allegro</button>
+                    <!-- Content Cards -->
+                    <div class="content-card">
+                        <div class="card-header">
+                            <span class="label-small">TYTUŁ OGŁOSZENIA</span>
+                            <button class="action-icon"><i class="fa-regular fa-copy"></i></button>
                         </div>
-                        
-                        <div class="tab-content">
-                            <!-- Title Section -->
-                            <div class="form-label" style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 700;">TYTUŁ OGŁOSZENIA</div>
-                            <div class="copy-field">
-                                <div class="copy-field-header" style="text-transform: none; display: flex; justify-content: space-between;">
-                                     <span></span>
-                                     <button class="copy-action"><i class="fa-regular fa-copy"></i> Kopiuj</button>
-                                </div>
-                                <div class="copy-field-content" style="font-weight: 700; font-size: 1.1rem;">
-                                    ${resultData[state.data.platform].title}
-                                </div>
-                            </div>
-
-                            <!-- Description Section -->
-                            <div class="form-label" style="font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 700;">OPIS</div>
-                            <div class="copy-field">
-                                <div class="copy-field-header" style="text-transform: none; display: flex; justify-content: space-between;">
-                                     <span></span>
-                                     <button class="copy-action"><i class="fa-regular fa-copy"></i> Kopiuj</button>
-                                </div>
-                                <div class="copy-field-content" style="white-space: pre-line;">
-                                    ${resultData[state.data.platform].desc}
-                                </div>
-                            </div>
-                        </div>
+                        <div class="content-title">${rData.title}</div>
                     </div>
+
+                    <div class="content-card">
+                        <div class="card-header">
+                            <span class="label-small">OPIS PRZEDMIOTU</span>
+                            <button class="action-icon"><i class="fa-regular fa-copy"></i></button>
+                        </div>
+                        <div class="content-desc">${rData.desc}</div>
+                    </div>
+                    
+                    <!-- Tags -->
+                    <div class="tags-container">
+                        <span class="tag-pill"><i class="fa-solid fa-tag"></i> ${state.data.category || 'Przedmiot'}</span>
+                        <span class="tag-pill"><i class="fa-solid fa-ruler"></i> ${state.data.size || 'Rozmiar'}</span>
+                        <span class="tag-pill"><i class="fa-solid fa-gem"></i> ${state.data.condition}</span>
+                        ${state.data.material ? `<span class="tag-pill"><i class="fa-solid fa-layer-group"></i> ${state.data.material}</span>` : ''}
+                    </div>
+
+                    <button class="btn-outline-primary" style="margin-top: 1rem; width: 100%;" onclick="resetApp()">
+                        <i class="fa-solid fa-rotate-left"></i> Dodaj kolejny przedmiot
+                    </button>
                 </div>
             </div>
         </div>
-    `
+    `},
+
+    history: () => {
+        if (state.history.length === 0) {
+            return `
+                <div style="text-align: center; padding: 4rem;">
+                    <i class="fa-regular fa-folder-open" style="font-size: 3rem; color: var(--text-light); margin-bottom: 1rem;"></i>
+                    <h2 style="color: var(--text-secondary);">Brak historii</h2>
+                    <button class="btn-primary" style="margin-top: 1rem;" onclick="resetApp()">Dodaj pierwsze ogłoszenie</button>
+                </div>
+            `;
+        }
+        return `
+            <div class="history-view">
+                <h1 style="margin-bottom: 2rem; font-size: 1.5rem; font-weight: 700;">Historia Ogłoszeń</h1>
+                <div class="grid-3">
+                    ${state.history.map((item, index) => `
+                        <div class="card" style="cursor: pointer; padding: 1rem; transition: transform 0.2s;" onclick="loadHistoryItem(${index})" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='none'">
+                            <div style="height: 150px; overflow: hidden; border-radius: 8px; margin-bottom: 1rem;">
+                                <img src="${item.uploadedImage}" style="width: 100%; height: 100%; object-fit: cover;">
+                            </div>
+                            <div style="font-weight: 700; margin-bottom: 0.25rem;">${item.category === 'shoes' ? 'Buty' : 'Odzież'} ${item.size}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem;">${item.condition}</div>
+                            <div style="font-size: 0.8rem; color: var(--primary); font-weight: 600;">Przywróć ogłoszenie ></div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
 };
 
-// Render Function
+// Render Logic
 function render() {
-    if (state.currentStep === 0) {
+    if (state.currentStep === 4) {
+        appView.innerHTML = views.history();
+    } else if (state.currentStep === 0) {
         appView.innerHTML = views.upload();
     } else if (state.currentStep === 1) {
         appView.innerHTML = views.details();
     } else if (state.currentStep === 3) {
         appView.innerHTML = views.result();
     } else {
-        // Loading state
         appView.innerHTML = `
-            <div style="text-align: center; padding: 4rem; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px;">
-                <div style="width: 60px; height: 60px; border: 4px solid #E5E7EB; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1.5rem;"></div>
-                <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--text-main);">Analizuję Twoje zdjęcie...</h2>
-                <p style="color: var(--text-secondary); margin-top: 0.5rem;">Rozpoznaję markę, model i stan przedmiotu</p>
+            <div style="text-align: center; padding: 4rem;">
+                <div style="width: 50px; height: 50px; border: 4px solid #E5E7EB; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1.5rem;"></div>
+                <h2>Analizuję...</h2>
             </div>
             <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
         `;
     }
 }
 
-// Logic / Handlers
-function triggerFileInput() {
-    document.getElementById('fileInput').click();
-}
+// Actions
+function triggerFileInput() { document.getElementById('fileInput').click(); }
 
 function handleFileSelect(event) {
     const file = event.target.files[0];
     if (file) {
-        // Read the file logic
         const reader = new FileReader();
-        reader.onload = function (e) {
-            state.data.uploadedImage = e.target.result; // Store Data URL
-
-            // Go to loading then details
+        reader.onload = (e) => {
+            state.data.uploadedImage = e.target.result;
             state.currentStep = 2; // Loading
             render();
-
-            setTimeout(() => {
-                state.currentStep = 1; // Details
-                render();
-            }, 1500);
+            setTimeout(() => { state.currentStep = 1; render(); }, 1000);
         };
         reader.readAsDataURL(file);
     }
 }
 
-function selectOption(btn, field, value) {
-    const siblings = btn.parentElement.querySelectorAll('.select-btn');
-    siblings.forEach(el => el.classList.remove('selected'));
-    btn.classList.add('selected');
-    state.data[field] = value;
+function setCategory(id) { state.data.category = id; state.data.audience = null; state.data.size = null; render(); }
+function setAudience(id) { state.data.audience = id; state.data.size = null; render(); }
+function setSize(s) { state.data.size = s; render(); }
+function setMaterial(m) { state.data.material = m; render(); }
+function setCondition(c) { state.data.condition = c; render(); }
+
+function submitDetails() {
+    state.history.unshift({ ...state.data, date: new Date() });
+    const btn = appView.querySelector('.btn-primary');
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-spin fa-circle-notch"></i>';
+    setTimeout(() => { state.currentStep = 3; render(); }, 1500);
 }
 
-function handleDetailsSubmit(e) {
-    e.preventDefault();
-    const btn = e.target.querySelector('button[type="submit"]');
-    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Generowanie...';
-    btn.disabled = true;
+function switchPlatform(p) { state.data.platform = p; render(); }
 
-    // Simulate generic delay
-    setTimeout(() => {
-        state.currentStep = 3; // Result
-        render();
-    }, 2000);
-}
-
-function switchPlatform(platform) {
-    state.data.platform = platform;
+// Navigation Actions
+function resetApp() {
+    state.currentStep = 0;
+    state.data = { category: null, audience: null, size: null, condition: "", material: "", platform: "vinted", uploadedImage: null };
     render();
 }
 
-// Initial Render
+function showHistory() {
+    state.currentStep = 4;
+    render();
+}
+
+function loadHistoryItem(index) {
+    state.data = { ...state.history[index] };
+    state.currentStep = 3;
+    render();
+}
+
 render();
