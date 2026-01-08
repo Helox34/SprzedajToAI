@@ -1,75 +1,94 @@
 <!DOCTYPE html>
 <html lang="pl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Gemini AI</title>
-    <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #1e1e1e; color: white; }
-        textarea { width: 100%; height: 100px; margin-bottom: 10px; padding: 10px; border-radius: 5px; border: none; }
-        button { padding: 10px 20px; cursor: pointer; background-color: #ff0055; color: white; border: none; border-radius: 5px; font-weight: bold; }
-        #output { margin-top: 20px; white-space: pre-wrap; background: #333; padding: 15px; border-radius: 5px; min-height: 50px;}
-    </style>
+    <title>SprzedajTo Ai - Twoje inteligentne ogłoszenia</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-    <h2>Test połączenia z Gemini</h2>
-    <p>Wpisz zapytanie poniżej:</p>
-    
-    <textarea id="promptInput">Opowiedz żart o programistach.</textarea>
-    <br>
-    <button id="generateBtn">Wyślij do AI</button>
+    <!-- Header -->
+    <header class="app-header">
+        <div class="logo">
+            <div class="logo-icon">S</div>
+            <span class="logo-text">SprzedajTo AP</span>
+        </div>
+        <div class="header-actions">
+            <button class="icon-btn" aria-label="Menu"><i class="fa-solid fa-grid-2"></i></button>
+            <button class="icon-btn" aria-label="History"><i class="fa-solid fa-clock-rotate-left"></i></button>
+        </div>
+    </header>
 
-    <div id="output">Tutaj pojawi się odpowiedź...</div>
+    <!-- Main Content -->
+    <main>
+        <!-- Stepper -->
+        <div class="stepper-container">
+            <div class="stepper">
+                <!-- Step 1 -->
+                <div class="step active completed">
+                    <div class="step-circle">1</div>
+                    <span class="step-label">Zdjęcie</span>
+                </div>
+                <!-- Line -->
+                <div class="step-line active"></div>
 
-    <script type="importmap">
-      {
-        "imports": {
-          "@google/generative-ai": "https://esm.run/@google/generative-ai"
-        }
-      }
-    </script>
+                <!-- Step 2 -->
+                <div class="step active completed">
+                    <div class="step-circle">2</div>
+                    <span class="step-label">Analiza</span>
+                </div>
+                <!-- Line -->
+                <div class="step-line active"></div>
 
-    <script type="module">
-      import { GoogleGenerativeAI } from "@google/generative-ai";
+                <!-- Step 3 (Current) -->
+                <div class="step active">
+                    <div class="step-circle">3</div>
+                    <span class="step-label">Szczegóły</span>
+                </div>
+                <!-- Line -->
+                <div class="step-line"></div>
 
-      // Twój klucz API (skopiowany ze zrzutu ekranu)
-      const API_KEY = "AIzaSyAHfGqaLponlZfBGooFFcn-Lqs4ALmaxXs";
+                <!-- Step 4 -->
+                <div class="step">
+                    <div class="step-circle">4</div>
+                    <span class="step-label">Tworzenie</span>
+                </div>
+                <!-- Line -->
+                <div class="step-line"></div>
 
-      // Konfiguracja modelu
-      const genAI = new GoogleGenerativeAI(API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+                <!-- Step 5 -->
+                <div class="step">
+                    <div class="step-circle">5</div>
+                    <span class="step-label">Gotowe</span>
+                </div>
+            </div>
+        </div>
 
-      const outputElement = document.getElementById('output');
-      const btn = document.getElementById('generateBtn');
+        <!-- Dynamic View Container -->
+        <div id="app-view" class="app-view">
+            <!-- Content will be injected here by JS -->
+        </div>
 
-      btn.addEventListener('click', async () => {
-          const prompt = document.getElementById('promptInput').value;
-          
-          if (!prompt) return;
+    </main>
 
-          outputElement.innerText = "Myślę...";
-          btn.disabled = true; // Blokada przycisku na czas generowania
+    <footer class="app-footer">
+        <p>© 2026 SprzedajTo AI. Powered by Google Gemini.</p>
+    </footer>
 
-          try {
-              // Wywołanie API
-              const result = await model.generateContent(prompt);
-              const response = await result.response;
-              const text = response.text();
-              
-              // Wyświetlenie wyniku
-              outputElement.innerText = text;
-          } catch (error) {
-              console.error("Błąd szczegółowy:", error);
-              outputElement.innerText = "BŁĄD: " + error.message;
-              
-              if (error.message.includes("403")) {
-                  alert("Błąd 403: Sprawdź w Google Cloud Console -> 'Dane uwierzytelniające' -> Twój klucz -> Ograniczenia aplikacji. Ustaw na 'Brak' (None).");
-              }
-          } finally {
-              btn.disabled = false;
-          }
-      });
-    </script>
+    <script src="script.js"></script>
 </body>
+
 </html>
