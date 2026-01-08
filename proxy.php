@@ -21,7 +21,7 @@ if (isset($headers['Authorization'])) {
 }
 
 // Jeśli nie ma klucza z przeglądarki, możesz go wpisać tutaj na sztywno (odkomentuj linię niżej):
-$apiKey = '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'; // <--- PASTE YOUR KEY HERE
+$apiKey = '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'; // <--- PASTE YOUR KEY HERE
 
 if (!$apiKey) {
     http_response_code(401);

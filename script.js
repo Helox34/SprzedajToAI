@@ -57,7 +57,7 @@ function saveHistory() {
 }
 
 // --- AI SERVICE ---
-async function callOpenRouter(messages, model = 'google/gemini-2.0-flash-exp:free') {
+async function callOpenRouter(messages, model = 'meta-llama/llama-3.2-90b-vision-instruct:free') {
     // 1. Try Proxy
     if (state.useProxy) {
         try {
