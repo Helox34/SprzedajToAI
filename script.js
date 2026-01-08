@@ -1,26 +1,35 @@
-// App State
+// State
 const state = {
-    currentStep: 0, // 0: Upload, 1: Details, 2: Loading, 3: Result, 4: History
+    currentStep: 0,
+    apiKey: localStorage.getItem('openrouter_key') || '',
+    useProxy: true, // Try proxy first
     data: {
+        itemName: "",
         category: null,
         audience: null,
         size: null,
         condition: "",
         material: "",
+        brand: "",
+        color: "",
         platform: "vinted",
-        uploadedImage: null
+        uploadedImage: null,
+        originalImage: null // Keep original for reference
     },
-    history: [] // Store generated items
+    history: [],
+    analysisStatus: ""
 };
 
-// Form Configuration
+// Configuration
 const formConfig = {
     categories: [
         { id: 'shoes', label: 'Buty', icon: 'fa-shoe-prints' },
-        { id: 'sweatshirt', label: 'Bluza', icon: 'fa-shirt' },
+        { id: 'shirt', label: 'Koszule', icon: 'fa-shirt' }, // Added
+        { id: 'sweatshirt', label: 'Bluza', icon: 'fa-layer-group' },
         { id: 'tshirt', label: 'Koszulka', icon: 'fa-shirt' },
         { id: 'pants', label: 'Spodnie', icon: 'fa-layer-group' },
         { id: 'jacket', label: 'Kurtka', icon: 'fa-vest' },
+        { id: 'accessories', label: 'Akcesoria', icon: 'fa-hat-cowboy' },
         { id: 'other', label: 'Inne', icon: 'fa-box-open' }
     ],
     audiences: [
@@ -29,98 +38,191 @@ const formConfig = {
         { id: 'kids', label: 'Dziecięce' },
         { id: 'unisex', label: 'Unisex' }
     ],
-    conditions: [
-        "Nowy z metką",
-        "Nowy bez metki",
-        "Bardzo dobry",
-        "Dobry",
-        "Zadowalający"
-    ],
     sizes: {
-        shoesAdult: ['36', '36.5', '37', '38', '38.5', '39', '40', '40.5', '41', '42', '42.5', '43', '44', '44.5', '45', '46', '47'],
-        shoesKids: ['20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40'],
-        clothing: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']
-    }
+        shoesWomen: ['32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42'], // New range
+        shoesAdult: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
+        shoesKids: ['20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'],
+        clothing: ['XS', 'S', 'M', 'L', 'XL', 'XXL']
+    },
+    conditions: ["Nowy z metką", "Nowy bez metki", "Bardzo dobry", "Dobry", "Zadowalający"]
 };
 
-// DOM Elements
+// --- DOM Elements ---
 const appView = document.getElementById('app-view');
 
-// Mock Result Data generator
-const getResultData = (platform) => {
-    const base = {
-        title: `Sprzedam ${state.data.category === 'shoes' ? 'Buty' : 'Przedmiot'} ${state.data.condition} ${state.data.size}`,
-        desc: `Markowy przedmiot w stanie: ${state.data.condition}. Materiał: ${state.data.material}. Rozmiar: ${state.data.size}.`
-    };
-
-    // Map to specific static content for demo if matches logic, otherwise generic template
-    if (state.data.category === 'sweatshirt' && state.data.audience === 'men') {
-        const staticData = {
-            vinted: { title: "Bluza NIKE AIR Crewneck Czarna M BDB", desc: "Świetna bluza Nike Air..." },
-            olx: { title: "Bluza Nike M Czarna", desc: "Sprzedam bluzę..." },
-            allegro: { title: "BLUZA NIKE MĘSKA M", desc: "Oryginalna bluza..." }
-        };
-        if (staticData[platform]) return staticData[platform];
+// --- AI SERVICE ---
+async function callOpenRouter(messages, model = 'google/gemini-2.0-flash-exp:free') {
+    // 1. Try Proxy
+    if (state.useProxy) {
+        try {
+            const resp = await fetch('proxy.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages, model })
+            });
+            if (resp.ok) return await resp.json();
+        } catch (e) {
+            console.warn("Proxy unavailable.");
+        }
     }
 
-    return {
-        title: [base.title, platform].join(" - "),
-        desc: base.desc
-    };
-};
+    // 2. Fallback to Direct Key
+    if (!state.apiKey) throw new Error("Missing API Key");
+
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${state.apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': window.location.href,
+            'X-Title': 'SprzedajTo AI Client'
+        },
+        body: JSON.stringify({ messages, model })
+    });
+
+    if (!resp.ok) throw new Error("AI Request Failed");
+    return await resp.json();
+}
+
+// Background Removal Only
+async function processImage(base64Image) {
+    state.analysisStatus = "Usuwanie tła...";
+    render();
+
+    try {
+        if (typeof imglyRemoveBackground !== 'undefined') {
+            const blob = await imglyRemoveBackground(base64Image);
+            state.data.uploadedImage = URL.createObjectURL(blob);
+        } else {
+            state.data.uploadedImage = base64Image;
+        }
+    } catch (e) {
+        console.error("BG Removal failed", e);
+        state.data.uploadedImage = base64Image;
+    } finally {
+        state.isAnalyzing = false;
+        state.currentStep = 1; // Go to Details
+        render();
+    }
+}
+
+async function generateDescription() {
+    // Use manually selected data for the prompt
+    const { category, audience, condition, material, size, platform } = state.data;
+    const categoryLabel = formConfig.categories.find(c => c.id === category)?.label || category;
+    const audienceLabel = formConfig.audiences.find(a => a.id === audience)?.label || audience;
+
+    const prompt = `
+    Jesteś ekspertem e-commerce. Napisz profesjonalne ogłoszenie sprzedaży na ${platform} na podstawie tych danych (użytkownik wybrał je ręcznie):
+    
+    Kategoria: ${categoryLabel}
+    Dla kogo: ${audienceLabel}
+    Stan: ${condition}
+    Materiał: ${material}
+    Rozmiar: ${size}
+    
+    Zanalizuj też załączone zdjęcie, aby dodać szczegóły (marka, kolor, styl), których użytkownik nie podał.
+    
+    Zwróć JSON:
+    {
+        "title": "Chwytliwy tytuł (max 50 znaków) z emoji",
+        "description": "Profesjonalny, sprzedażowy opis, zachęcający do zakupu. Podkreśl zalety."
+    }
+    `;
+
+    try {
+        // We send the image here for the FINAL text generation, not for filling the form
+        const response = await callOpenRouter([
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: prompt },
+                    { type: "image_url", image_url: { url: state.data.originalImage } } // Use original image for context
+                ]
+            }
+        ]);
+        const content = response.choices[0].message.content.replace(/```json|```/g, '').trim();
+        return JSON.parse(content);
+    } catch (e) {
+        console.error(e);
+        return {
+            title: `Sprzedam ${categoryLabel} - ${condition}`,
+            description: "Świetny przedmiot w dobrej cenie. Polecam!"
+        };
+    }
+}
 
 
-// Views Components
+// --- VIEWS ---
+
 const views = {
     upload: () => `
-        <div style="text-align: center; animation: fadeIn 0.5s;">
-            <h1 class="hero-title">Sprzedaj to. Szybko.</h1>
-            <p class="hero-subtitle">AI stworzy ofertę za Ciebie w 5 sekund.</p>
+        <div class="upload-container fade-in">
+            <h1 class="hero-title">Sprzedaj to szybciej z <span class="highlight">AI</span></h1>
+            <p class="hero-subtitle">Wgraj zdjęcie, wybierz parametry, a AI napisze opis.</p>
             
-            <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
-            
-            <div class="upload-container" onclick="triggerFileInput()">
-                <div class="upload-icon-circle">
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
-                </div>
-                <h3 class="upload-title">Zrób zdjęcie lub wgraj plik</h3>
-                <p class="upload-desc">Obsługujemy JPG, PNG, WEBP</p>
-                
-                <div class="upload-actions">
-                    <button class="btn-upload-option btn-gallery" onclick="event.stopPropagation(); triggerFileInput()">
-                        <i class="fa-solid fa-image"></i> Galeria
-                    </button>
-                    <button class="btn-upload-option btn-camera" onclick="event.stopPropagation(); triggerFileInput()">
-                        <i class="fa-solid fa-camera"></i> Aparat
-                    </button>
-                </div>
+            <div class="upload-box" onclick="triggerFileInput()">
+                <div class="upload-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                <h3>Dodaj zdjęcie przedmiotu</h3>
+                <p>Lub upuść plik tutaj</p>
+                <button class="btn-primary">Wybierz z galerii</button>
             </div>
+            
+            <input type="file" id="fileInput" hidden accept="image/*" onchange="handleFileSelect(event)">
+        </div>
+    `,
+
+    analysis: () => `
+        <div class="ai-loader fade-in">
+            <div class="image-scan-container">
+                <img src="${state.data.originalImage}" style="width:100%; height:100%; object-fit:cover;">
+                <div class="scan-line"></div>
+            </div>
+            <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem;">Przetwarzanie zdjęcia...</h2>
+            <p style="color: var(--text-secondary);">Usuwamy tło i przygotowujemy edytor.</p>
         </div>
     `,
 
     details: () => {
-        // Render Categories
+        // Helper to get sizes based on selection
+        const getSizes = () => {
+            if (!state.data.category || !state.data.audience) return [];
+
+            // Special case for 'Other' - no sizes
+            if (state.data.category === 'other') return [];
+
+            if (state.data.category === 'shoes') {
+                if (state.data.audience === 'kids') return formConfig.sizes.shoesKids;
+                if (state.data.audience === 'women') return formConfig.sizes.shoesWomen; // Use new range
+                return formConfig.sizes.shoesAdult;
+            }
+            return formConfig.sizes.clothing;
+        };
+
+        const availableSizes = getSizes();
+        const isOther = state.data.category === 'other';
+
+        // Render Functions
         const renderCategories = () => `
-            <div class="form-section">
-                <label class="form-label">Co sprzedajesz? (Wybierz kategorię)</label>
-                <div class="grid-flexible">
+            <div class="form-section fade-in">
+                <label class="form-label">Kategoria</label>
+                <div class="grid-4">
                     ${formConfig.categories.map(cat => `
                         <button type="button" 
-                            class="select-btn category-btn ${state.data.category === cat.id ? 'selected' : ''}" 
+                            class="select-btn ${state.data.category === cat.id ? 'selected' : ''}" 
                             onclick="setCategory('${cat.id}')">
-                            <i class="fa-solid ${cat.icon}"></i> 
-                            <span>${cat.label}</span>
+                            <i class="fa-solid ${cat.icon}" style="margin-bottom: 8px; font-size: 1.2rem;"></i>
+                            ${cat.label}
                         </button>
                     `).join('')}
                 </div>
             </div>
         `;
 
-        // Render Audience (Horizontal)
         const renderAudience = () => {
             if (!state.data.category) return '';
             return `
-                <div class="form-section fade-in" style="margin-top: 2rem;">
+                <div class="form-section fade-in">
                     <label class="form-label">Dla kogo?</label>
                     <div class="grid-flexible">
                         ${formConfig.audiences.map(aud => `
@@ -135,20 +237,15 @@ const views = {
             `;
         };
 
-        // Render Sizes
         const renderSizes = () => {
-            if (!state.data.category || !state.data.audience) return '';
-
-            let type = 'clothing';
-            if (state.data.category === 'shoes') {
-                type = state.data.audience === 'kids' ? 'shoesKids' : 'shoesAdult';
-            }
+            if (!state.data.audience) return '';
+            if (isOther) return ''; // Skip for Other
 
             return `
-                <div class="form-section fade-in" style="margin-top: 2rem;">
+                <div class="form-section fade-in">
                     <label class="form-label">Rozmiar</label>
                     <div class="size-grid">
-                        ${formConfig.sizes[type].map(s => `
+                        ${availableSizes.map(s => `
                             <button type="button" 
                                 class="size-option ${state.data.size === s ? 'selected' : ''}" 
                                 onclick="setSize('${s}')">
@@ -160,26 +257,36 @@ const views = {
             `;
         };
 
-        // Render Material
         const renderMaterial = () => {
-            if (!state.data.category || !state.data.audience || !state.data.size) return '';
+            // Show if size selected OR it's 'other' (and audience selected)
+            if (!state.data.size && !isOther) return '';
+            if (isOther) return ''; // User asked to REMOVE material for 'other' too
+
             return `
-                <div class="form-section fade-in" style="margin-top: 2rem;">
+                <div class="form-section fade-in">
                     <label class="form-label">Materiał</label>
-                    <input type="text" class="form-input" 
-                        placeholder="Np. Bawełna, Skóra, Poliester..." 
-                        value="${state.data.material}"
-                        onchange="setMaterial(this.value)"
-                        style="width: 100%; padding: 1rem; border-radius: var(--radius-md);">
+                    <div class="input-wa-button">
+                        <input type="text" id="materialInput" class="form-input" 
+                            placeholder="Np. Bawełna, Skóra..." 
+                            value="${state.data.material}"
+                            onchange="setMaterial(this.value)"
+                            style="border-radius: var(--radius-md);">
+                        <button class="btn-input-confirm" onclick="setMaterial(document.getElementById('materialInput').value)">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                    </div>
                 </div>
              `;
         };
 
-        // Render Condition (5 options, Horizontal)
         const renderCondition = () => {
-            if (!state.data.material) return '';
+            // Show if material set OR it's 'other' (since other skips size/material)
+            const showCondition = state.data.material || isOther;
+
+            if (!showCondition) return '';
+
             return `
-                 <div class="form-section fade-in" style="margin-top: 2rem;">
+                 <div class="form-section fade-in">
                     <label class="form-label">Stan przedmiotu</label>
                     <div class="grid-flexible-small">
                          ${formConfig.conditions.map(c => `
@@ -192,7 +299,8 @@ const views = {
             `;
         };
 
-        const isReady = state.data.category && state.data.audience && state.data.size && state.data.material && state.data.condition;
+        const isReady = state.data.category && state.data.audience && state.data.condition &&
+            (isOther || (state.data.size && state.data.material));
 
         const renderSubmit = () => {
             if (!isReady) return '';
@@ -202,6 +310,9 @@ const views = {
                         Generuj Ogłoszenie 
                         <i class="fa-solid fa-rocket" style="margin-left: 8px;"></i>
                     </button>
+                    <p style="text-align: center; margin-top: 1rem; color: #666; font-size: 0.9rem;">
+                        Teraz AI przeanalizuje Twoje wybory i zdjęcie, aby stworzyć idealny opis.
+                    </p>
                 </div>
             `;
         };
@@ -210,8 +321,10 @@ const views = {
             <div class="card">
                 <div style="margin-bottom: 2rem;">
                     <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--text-main);">
-                        <i class="fa-solid fa-list-check" style="color: var(--primary); margin-right: 0.5rem;"></i> Szczegóły
+                        <i class="fa-solid fa-list" style="color: var(--primary); margin-right: 0.5rem;"></i>
+                        Uzupełnij szczegóły
                     </h1>
+                     <p style="color: var(--text-secondary); font-size: 0.9rem;">Wybierz parametry, a my zajmiemy się opisem.</p>
                 </div>
 
                 <div id="dynamic-form">
@@ -226,8 +339,14 @@ const views = {
         `;
     },
 
-    result: () => {
-        const rData = getResultData(state.data.platform);
+    result: async () => {
+        // Async Wrapper for Result to handle AI generation
+        if (!state.generatedData) {
+            state.generatedData = await generateDescription();
+        }
+
+        const rData = state.generatedData;
+        const uploadImg = state.data.uploadedImage || 'https://via.placeholder.com/400';
 
         return `
         <div class="result-layout fade-in">
@@ -236,50 +355,36 @@ const views = {
                 <div class="success-icon"><i class="fa-solid fa-check"></i></div>
                 <div>
                     <div style="font-weight: 700;">Ogłoszenie gotowe!</div>
-                    <div style="font-size: 0.9rem; opacity: 0.9;">Wygenerowaliśmy opis, tytuł i odświeżyliśmy zdjęcie. Jesteś gotowy do sprzedaży.</div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Wygenerowaliśmy opis, tytuł i odświeżyliśmy zdjęcie.</div>
                 </div>
             </div>
 
             <div class="result-grid">
-                <!-- Left Column: Visuals & Price -->
+                <!-- Left Column -->
                 <div class="result-col-left">
-                    <!-- Image Card -->
                     <div class="image-card-hero">
                         <span class="badge-enhanced">AI ENHANCED</span>
-                        <img src="${state.data.uploadedImage || 'https://via.placeholder.com/400'}" class="product-image-hero">
+                        <img src="${uploadImg}" class="product-image-hero">
                     </div>
 
-                    <!-- Hero Price Card (Blue) -->
                     <div class="price-card-hero">
-                        <div class="price-header">
-                            <i class="fa-solid fa-dollar-sign"></i> Sugerowana cena
-                        </div>
+                        <div class="price-header"><i class="fa-solid fa-dollar-sign"></i> Sugerowana cena</div>
                         <div class="price-amount">130 - 175 PLN</div>
-                        <div class="price-desc">
-                            Twoje ogłoszenie wyróżnia się na tle konkurencji. Cena zoptymalizowana dla szybkiej sprzedaży.
-                        </div>
+                        <div class="price-desc">Cena zoptymalizowana przez AI dla szybkiej sprzedaży na ${state.data.platform}.</div>
                     </div>
                 </div>
 
-                <!-- Right Column: Content & Tabs -->
+                <!-- Right Column -->
                 <div class="result-col-right">
-                    <!-- Tabs -->
                     <div class="tabs-modern">
-                         <button class="tab-modern ${state.data.platform === 'vinted' ? 'active' : ''}" onclick="switchPlatform('vinted')">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/2/29/Vinted_logo.png" alt="Vinted" style="height: 20px; opacity: 0.8;">
-                         </button>
-                         <button class="tab-modern ${state.data.platform === 'olx' ? 'active' : ''}" onclick="switchPlatform('olx')">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/OLX_green_logo.svg/1200px-OLX_green_logo.svg.png" alt="OLX" style="height: 20px; opacity: 0.8;">
-                         </button>
-                         <button class="tab-modern ${state.data.platform === 'allegro' ? 'active' : ''}" onclick="switchPlatform('allegro')">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/9/9d/Allegro_logo.svg" alt="Allegro" style="height: 24px; opacity: 0.8;">
-                         </button>
+                         <button class="tab-modern ${state.data.platform === 'vinted' ? 'active' : ''}" onclick="switchPlatform('vinted')">Vinted</button>
+                         <button class="tab-modern ${state.data.platform === 'olx' ? 'active' : ''}" onclick="switchPlatform('olx')">OLX</button>
+                         <button class="tab-modern ${state.data.platform === 'allegro' ? 'active' : ''}" onclick="switchPlatform('allegro')">Allegro</button>
                     </div>
 
-                    <!-- Content Cards -->
                     <div class="content-card">
                         <div class="card-header">
-                            <span class="label-small">TYTUŁ OGŁOSZENIA</span>
+                            <span class="label-small">TYTUŁ</span>
                             <button class="action-icon"><i class="fa-regular fa-copy"></i></button>
                         </div>
                         <div class="content-title">${rData.title}</div>
@@ -287,13 +392,12 @@ const views = {
 
                     <div class="content-card">
                         <div class="card-header">
-                            <span class="label-small">OPIS PRZEDMIOTU</span>
+                            <span class="label-small">OPIS</span>
                             <button class="action-icon"><i class="fa-regular fa-copy"></i></button>
                         </div>
-                        <div class="content-desc">${rData.desc}</div>
+                        <div class="content-desc">${rData.description}</div>
                     </div>
                     
-                    <!-- Tags -->
                     <div class="tags-container">
                         <span class="tag-pill"><i class="fa-solid fa-tag"></i> ${state.data.category || 'Przedmiot'}</span>
                         <span class="tag-pill"><i class="fa-solid fa-ruler"></i> ${state.data.size || 'Rozmiar'}</span>
@@ -307,7 +411,8 @@ const views = {
                 </div>
             </div>
         </div>
-    `},
+        `;
+    },
 
     history: () => {
         if (state.history.length === 0) {
@@ -320,17 +425,16 @@ const views = {
             `;
         }
         return `
-            <div class="history-view">
+            <div class="history-view fade-in">
                 <h1 style="margin-bottom: 2rem; font-size: 1.5rem; font-weight: 700;">Historia Ogłoszeń</h1>
                 <div class="grid-3">
                     ${state.history.map((item, index) => `
-                        <div class="card" style="cursor: pointer; padding: 1rem; transition: transform 0.2s;" onclick="loadHistoryItem(${index})" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform='none'">
-                            <div style="height: 150px; overflow: hidden; border-radius: 8px; margin-bottom: 1rem;">
+                        <div class="card" style="cursor: pointer; padding: 1rem;" onclick="loadHistoryItem(${index})">
+                            <div style="height: 150px; overflow: hidden; border-radius: 8px; margin-bottom: 0.5rem;">
                                 <img src="${item.uploadedImage}" style="width: 100%; height: 100%; object-fit: cover;">
                             </div>
-                            <div style="font-weight: 700; margin-bottom: 0.25rem;">${item.category === 'shoes' ? 'Buty' : 'Odzież'} ${item.size}</div>
-                            <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem;">${item.condition}</div>
-                            <div style="font-size: 0.8rem; color: var(--primary); font-weight: 600;">Przywróć ogłoszenie ></div>
+                            <div style="font-weight: 700;">${item.itemName || 'Ogłoszenie'}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${item.date ? item.date.toLocaleDateString() : ''}</div>
                         </div>
                     `).join('')}
                 </div>
@@ -339,8 +443,13 @@ const views = {
     }
 };
 
-// Render Logic
-function render() {
+// --- RENDERER ---
+async function render() {
+    if (state.isAnalyzing) {
+        appView.innerHTML = views.analysis();
+        return;
+    }
+
     if (state.currentStep === 4) {
         appView.innerHTML = views.history();
     } else if (state.currentStep === 0) {
@@ -348,19 +457,19 @@ function render() {
     } else if (state.currentStep === 1) {
         appView.innerHTML = views.details();
     } else if (state.currentStep === 3) {
-        appView.innerHTML = views.result();
-    } else {
-        appView.innerHTML = `
-            <div style="text-align: center; padding: 4rem;">
-                <div style="width: 50px; height: 50px; border: 4px solid #E5E7EB; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1.5rem;"></div>
-                <h2>Analizuję...</h2>
-            </div>
-            <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
-        `;
+        // Result is Async due to generation
+        appView.innerHTML = '<div class="ai-loader"><h2>Generowanie opisu...</h2></div>';
+        try {
+            const html = await views.result();
+            appView.innerHTML = html;
+        } catch (e) {
+            console.error("Render failed", e);
+            appView.innerHTML = "Wystąpił błąd generowania.";
+        }
     }
 }
 
-// Actions
+// --- ACTIONS ---
 function triggerFileInput() { document.getElementById('fileInput').click(); }
 
 function handleFileSelect(event) {
@@ -368,46 +477,89 @@ function handleFileSelect(event) {
     if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            state.data.uploadedImage = e.target.result;
-            state.currentStep = 2; // Loading
-            render();
-            setTimeout(() => { state.currentStep = 1; render(); }, 1000);
+            state.data.originalImage = e.target.result;
+            state.isAnalyzing = true;
+            processImage(state.data.originalImage); // Removes BG only, then goes to Details
         };
         reader.readAsDataURL(file);
     }
 }
 
-function setCategory(id) { state.data.category = id; state.data.audience = null; state.data.size = null; render(); }
-function setAudience(id) { state.data.audience = id; state.data.size = null; render(); }
+function setCategory(id) { state.data.category = id; render(); }
+function setAudience(id) { state.data.audience = id; render(); }
 function setSize(s) { state.data.size = s; render(); }
-function setMaterial(m) { state.data.material = m; render(); }
+function setMaterial(m) { state.data.material = m; } // No re-render needed for input
 function setCondition(c) { state.data.condition = c; render(); }
 
 function submitDetails() {
+    state.generatedData = null; // Force regenerate
     state.history.unshift({ ...state.data, date: new Date() });
-    const btn = appView.querySelector('.btn-primary');
-    if (btn) btn.innerHTML = '<i class="fa-solid fa-spin fa-circle-notch"></i>';
-    setTimeout(() => { state.currentStep = 3; render(); }, 1500);
-}
-
-function switchPlatform(p) { state.data.platform = p; render(); }
-
-// Navigation Actions
-function resetApp() {
-    state.currentStep = 0;
-    state.data = { category: null, audience: null, size: null, condition: "", material: "", platform: "vinted", uploadedImage: null };
-    render();
-}
-
-function showHistory() {
-    state.currentStep = 4;
-    render();
-}
-
-function loadHistoryItem(index) {
-    state.data = { ...state.history[index] };
     state.currentStep = 3;
     render();
 }
 
-render();
+function switchPlatform(p) {
+    state.data.platform = p;
+    state.generatedData = null; // Regenerate for platform
+    render();
+}
+
+function resetApp() {
+    state.currentStep = 0;
+    state.data = { category: null, audience: null, size: null, condition: "", material: "", platform: "vinted", uploadedImage: null, originalImage: null };
+    render();
+}
+
+function showHistory() { state.currentStep = 4; render(); }
+function loadHistoryItem(index) {
+    state.data = { ...state.history[index] };
+    state.generatedData = null; // Maybe store this too?
+    state.currentStep = 3;
+    render();
+}
+
+// Settings Modal Logic
+function openSettings() {
+    // Check if modal exists
+    if (!document.getElementById('settings-modal')) {
+        const modal = document.createElement('div');
+        modal.id = 'settings-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h2>Ustawienia</h2>
+                <p style="margin-bottom: 1rem; color: #666;">Wprowadź klucz jeśli nie używasz Proxy.</p>
+                <div class="form-section">
+                    <label class="form-label">OpenRouter API Key</label>
+                    <input type="password" id="api-key-input" class="form-input" style="width: 100%; padding: 0.5rem;" value="${state.apiKey}">
+                </div>
+                <button class="btn-primary" onclick="saveSettings()">Zapisz</button>
+                <button class="btn-outline-primary" style="margin-top: 0.5rem;" onclick="closeSettings()">Anuluj</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    setTimeout(() => document.getElementById('settings-modal').classList.add('active'), 10);
+}
+
+function closeSettings() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        setTimeout(() => modal.remove(), 300);
+    }
+}
+
+function saveSettings() {
+    const key = document.getElementById('api-key-input').value;
+    state.apiKey = key;
+    localStorage.setItem('openrouter_key', key);
+    closeSettings();
+}
+
+// Attach Settings to Gear Icon
+document.addEventListener('DOMContentLoaded', () => {
+    const gearBtn = document.querySelector('.fa-gear').parentElement;
+    gearBtn.onclick = openSettings;
+    render();
+});
